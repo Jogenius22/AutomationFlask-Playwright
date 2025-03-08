@@ -22,14 +22,16 @@ steps:
       - "managed"
       - "--allow-unauthenticated"
       - "--memory"
-      - "1Gi"
+      - "2Gi"
       - "--cpu"
-      - "1"
+      - "2"
+      - "--timeout"
+      - "3600s"
       - "--set-env-vars"
-      - "CLOUD_ENV=true"
+      - "CLOUD_ENV=true,DISPLAY=:99"
 
 # Store images in Google Container Registry
 images:
   - "gcr.io/$PROJECT_ID/airtasker-bot:$COMMIT_SHA"
 
-timeout: "1200s"
+timeout: "1800s"

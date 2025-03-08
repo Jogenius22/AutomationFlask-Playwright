@@ -6,7 +6,8 @@ import os
 import uuid
 from flask import current_app
 
-from app.automations.main import run_airtasker_bot
+# Import the new Playwright-based implementation
+from app.automations.playwright_main import run_bot
 from app import data_manager as dm
 
 def start_bot_task(account_id, city_id, message_id, max_posts=3, image=None, headless=True):
@@ -19,7 +20,7 @@ def start_bot_task(account_id, city_id, message_id, max_posts=3, image=None, hea
         message_id: The ID of the message to use
         max_posts: Maximum number of posts to comment on
         image: Optional image path to attach
-        headless: Whether to run browser in headless mode (default: False)
+        headless: Whether to run browser in headless mode (default: True)
     """
     from app import create_app
     
@@ -30,7 +31,7 @@ def start_bot_task(account_id, city_id, message_id, max_posts=3, image=None, hea
     # Generate a unique group ID for log filtering
     group_id = str(uuid.uuid4())
     
-    dm.add_log(f"Starting bot for {account['email']} in {city['name']}", "info", group_id=group_id)
+    dm.add_log(f"Starting bot for {account['email']} in {city['name']} (Playwright engine)", "info", group_id=group_id)
     
     if not account or not city or not message:
         error_msg = "Missing required data:"
@@ -47,8 +48,14 @@ def start_bot_task(account_id, city_id, message_id, max_posts=3, image=None, hea
                 # Update the last used timestamp
                 dm.update_account_last_used(account_id)
                 
-                # Run the bot
-                run_airtasker_bot(
+                # In cloud environments, always use headless mode
+                is_cloud = os.environ.get('CLOUD_ENV', '').lower() == 'true'
+                if is_cloud:
+                    headless = True
+                    dm.add_log("Running in cloud environment. Forcing headless mode.", "info", group_id=group_id)
+                
+                # Run the bot using Playwright
+                result = run_bot(
                     email=account['email'],
                     password=account['password'],
                     city_name=city['name'],
@@ -58,7 +65,11 @@ def start_bot_task(account_id, city_id, message_id, max_posts=3, image=None, hea
                     headless=headless
                 )
                 
-                dm.add_log("Bot task completed successfully", "success", group_id=group_id)
+                if result.get('status') == 'success':
+                    dm.add_log("Bot task completed successfully", "success", group_id=group_id)
+                else:
+                    dm.add_log(f"Bot task finished with issues: {result.get('message', 'Unknown error')}", "warning", group_id=group_id)
+                    
             except Exception as e:
                 tb = traceback.format_exc()
                 dm.add_log(f"Bot error: {str(e)}\n{tb}", "error", group_id=group_id)
@@ -68,4 +79,4 @@ def start_bot_task(account_id, city_id, message_id, max_posts=3, image=None, hea
     thread.daemon = True
     thread.start()
     
-    return {"status": "success", "message": "Bot started", "group_id": group_id} 
+    return {"status": "success", "message": "Bot started with Playwright engine", "group_id": group_id} 

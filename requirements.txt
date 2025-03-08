@@ -1,13 +1,11 @@
 flask==2.2.5
 flask-wtf==1.2.1
-selenium==4.20.0
-chromedriver-autoinstaller==0.6.0
+playwright==1.42.0
 python-dotenv==1.0.1
 werkzeug==2.2.3
 wtforms==3.1.2
 gunicorn==21.2.0
 waitress==3.0.2
-chrome-extension-python==1.0.1
 requests==2.32.3
 Pillow==10.2.0
 pyvirtualdisplay==3.0
