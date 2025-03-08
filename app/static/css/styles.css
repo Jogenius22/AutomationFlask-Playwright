@@ -1,0 +1,163 @@
+/* Main Styles for Airtasker Bot Manager */
+
+/* Add some additional padding to the body */
+body {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+/* Custom card styling */
+.card {
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  margin-bottom: 1.5rem;
+  border-radius: 0.5rem;
+  overflow: hidden;
+}
+
+.card-header {
+  font-weight: bold;
+  padding: 0.75rem 1.25rem;
+}
+
+/* Table improvements */
+.table {
+  margin-bottom: 0;
+}
+
+.table th {
+  font-weight: 600;
+  background-color: #f8f9fa;
+}
+
+/* Make the navbar a bit more prominent */
+.navbar {
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.navbar-brand {
+  font-weight: bold;
+  font-size: 1.4rem;
+}
+
+/* Active nav styling */
+.nav-link.active {
+  font-weight: bold;
+}
+
+/* Form improvements */
+.form-control:focus {
+  border-color: #80bdff;
+  box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
+}
+
+/* Badge customization */
+.badge {
+  font-weight: 500;
+  padding: 0.4em 0.6em;
+}
+
+/* Footer styling */
+footer {
+  margin-top: auto;
+  padding: 1.5rem 0;
+  border-top: 1px solid #e9ecef;
+}
+
+/* Alerts */
+.alert {
+  border-radius: 0.5rem;
+}
+
+/* Dashboard specific styles */
+.dashboard-stats {
+  text-align: center;
+  padding: 1.5rem;
+}
+
+.dashboard-stats h3 {
+  font-size: 2rem;
+  font-weight: bold;
+  margin-bottom: 0.5rem;
+}
+
+.dashboard-stats p {
+  color: #6c757d;
+  margin-bottom: 0;
+}
+
+/* Custom buttons */
+.btn {
+  border-radius: 0.3rem;
+}
+
+/* Card title adjustments */
+.card-title {
+  font-weight: 600;
+  margin-bottom: 1rem;
+}
+
+/* Make form labels a bit more noticeable */
+.form-label {
+  font-weight: 500;
+}
+
+/* Add a bit of padding to the main content */
+.container {
+  padding-bottom: 2rem;
+}
+
+/* Status indicator for accounts and schedules */
+.status-indicator {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  margin-right: 5px;
+}
+
+.status-active {
+  background-color: #28a745;
+}
+
+.status-inactive {
+  background-color: #dc3545;
+}
+
+/* Add some spacing between sections */
+hr {
+  margin: 2rem 0;
+  opacity: 0.15;
+}
+
+/* Custom pagination styling */
+.pagination {
+  margin-top: 1.5rem;
+  margin-bottom: 0;
+}
+
+.page-link {
+  color: #007bff;
+}
+
+.page-item.active .page-link {
+  background-color: #007bff;
+  border-color: #007bff;
+}
+
+/* Image preview in message cards */
+.message-image-preview {
+  max-height: 150px;
+  object-fit: contain;
+}
+
+/* Responsive adjustments */
+@media (max-width: 767.98px) {
+  h2 {
+    font-size: 1.75rem;
+  }
+
+  .card-header h5 {
+    font-size: 1.1rem;
+  }
+}

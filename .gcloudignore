@@ -1,0 +1,26 @@
+# Python bytecode files
+__pycache__/
+*.py[cod]
+*.class
+
+# Development environments
+.env
+env/
+venv/
+ENV/
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Version control
+.git
+.gitignore
+
+# Local screenshots
+screenshots/*.png
+
+# Temporary files
+*.log
+*.tmp
+.DS_Store

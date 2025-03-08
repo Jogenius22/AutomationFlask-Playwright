@@ -1,0 +1,145 @@
+{% extends 'base.html' %} {% block title %}Settings - Airtasker Bot Manager{%
+endblock %} {% block content %}
+<div class="row mb-4">
+  <div class="col-md-12">
+    <div class="d-flex justify-content-between align-items-center">
+      <h2><i class="fas fa-cog me-2"></i>Settings</h2>
+    </div>
+    <hr />
+  </div>
+</div>
+
+<div class="row">
+  <div class="col-lg-8 mx-auto">
+    <div class="card">
+      <div class="card-header bg-primary text-white">
+        <h5 class="mb-0">Application Settings</h5>
+      </div>
+      <div class="card-body">
+        <form method="post">
+          {{ form.csrf_token }}
+
+          <div class="row mb-4">
+            <div class="col-md-6">
+              <div class="mb-3">
+                <label for="run_interval" class="form-label"
+                  >{{ form.run_interval.label }}</label
+                >
+                {{ form.run_interval(class="form-control") }} {% if
+                form.run_interval.errors %}
+                <div class="invalid-feedback d-block">
+                  {% for error in form.run_interval.errors %} {{ error }} {%
+                  endfor %}
+                </div>
+                {% endif %}
+                <div class="form-text">
+                  How often to check for tasks (in minutes)
+                </div>
+              </div>
+            </div>
+            <div class="col-md-6">
+              <div class="mb-3">
+                <label for="max_posts_per_day" class="form-label"
+                  >{{ form.max_posts_per_day.label }}</label
+                >
+                {{ form.max_posts_per_day(class="form-control") }} {% if
+                form.max_posts_per_day.errors %}
+                <div class="invalid-feedback d-block">
+                  {% for error in form.max_posts_per_day.errors %} {{ error }}
+                  {% endfor %}
+                </div>
+                {% endif %}
+                <div class="form-text">
+                  Maximum number of comments to post per day
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="row mb-4">
+            <div class="col-md-6">
+              <div class="mb-3">
+                <label for="timeout_between_actions" class="form-label"
+                  >{{ form.timeout_between_actions.label }}</label
+                >
+                {{ form.timeout_between_actions(class="form-control") }} {% if
+                form.timeout_between_actions.errors %}
+                <div class="invalid-feedback d-block">
+                  {% for error in form.timeout_between_actions.errors %} {{
+                  error }} {% endfor %}
+                </div>
+                {% endif %}
+                <div class="form-text">
+                  Wait time between actions (in seconds)
+                </div>
+              </div>
+            </div>
+            <div class="col-md-6">
+              <div class="mb-3 d-flex flex-column">
+                <label class="form-label">Delay Settings</label>
+                <div class="form-check mt-2">
+                  {{ form.enable_random_delays(class="form-check-input") }}
+                  <label for="enable_random_delays" class="form-check-label"
+                    >{{ form.enable_random_delays.label }}</label
+                  >
+                  <div class="form-text">
+                    Add random delays to appear more human-like
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="alert alert-info mb-4">
+            <i class="fas fa-info-circle me-2"></i>
+            These settings control how the bot operates. Please adjust carefully
+            to avoid detection.
+          </div>
+
+          <button type="submit" class="btn btn-success">
+            <i class="fas fa-save me-2"></i>Save Settings
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="row mt-4">
+  <div class="col-lg-8 mx-auto">
+    <div class="card">
+      <div class="card-header bg-info text-white">
+        <h5 class="mb-0">
+          <i class="fas fa-info-circle me-2"></i>Settings Information
+        </h5>
+      </div>
+      <div class="card-body">
+        <dl class="row">
+          <dt class="col-sm-4">Run Interval</dt>
+          <dd class="col-sm-8">
+            How frequently (in minutes) the system will check for tasks to
+            comment on.
+          </dd>
+
+          <dt class="col-sm-4">Maximum Posts Per Day</dt>
+          <dd class="col-sm-8">
+            Limits the number of comments that can be posted per day to avoid
+            detection.
+          </dd>
+
+          <dt class="col-sm-4">Timeout Between Actions</dt>
+          <dd class="col-sm-8">
+            The base wait time (in seconds) between browser actions.
+          </dd>
+
+          <dt class="col-sm-4">Enable Random Delays</dt>
+          <dd class="col-sm-8">
+            When enabled, adds random variations to wait times to appear more
+            human-like.
+          </dd>
+        </dl>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,55 @@
+{% extends 'base.html' %} {% block title %}Screenshots - Airtasker Bot Manager{%
+endblock %} {% block content %}
+<div class="container mt-4">
+  <div class="d-flex justify-content-between align-items-center mb-4">
+    <h1>Bot Screenshots</h1>
+    <div>
+      <a href="{{ url_for('main.dashboard') }}" class="btn btn-secondary"
+        >Back to Dashboard</a
+      >
+    </div>
+  </div>
+
+  {% if screenshots %}
+  <div class="row">
+    {% for screenshot in screenshots %}
+    <div class="col-md-4 mb-4">
+      <div class="card h-100">
+        <img
+          src="{{ screenshot.filepath }}"
+          class="card-img-top img-fluid"
+          alt="{{ screenshot.filename }}"
+          style="max-height: 200px; object-fit: cover"
+        />
+        <div class="card-body">
+          <h5 class="card-title">{{ screenshot.description }}</h5>
+          <p class="card-text small text-truncate">{{ screenshot.filename }}</p>
+          <p class="card-text">
+            <small class="text-muted"
+              >Taken: {{ screenshot.created_at.strftime('%Y-%m-%d %H:%M:%S')
+              }}</small
+            >
+          </p>
+          <div class="d-flex justify-content-between">
+            <a
+              href="{{ screenshot.filepath }}"
+              class="btn btn-primary"
+              target="_blank"
+              >View Full Size</a
+            >
+          </div>
+        </div>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+
+  <!-- Pagination could be added here if needed -->
+
+  {% else %}
+  <div class="alert alert-info">
+    No screenshots found. Bot executions will capture screenshots automatically.
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

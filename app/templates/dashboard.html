@@ -1,0 +1,272 @@
+{% extends 'base.html' %} {% block title %}Dashboard - Airtasker Bot Manager{%
+endblock %} {% block content %}
+<div class="row mb-4">
+  <div class="col-md-12">
+    <div class="card">
+      <div class="card-header bg-primary text-white">
+        <h5 class="mb-0"><i class="fas fa-play-circle me-2"></i>Start Bot</h5>
+      </div>
+      <div class="card-body">
+        <form action="{{ url_for('main.start_bot') }}" method="post">
+          <div class="row">
+            <div class="col-md-3">
+              <div class="form-group mb-3">
+                <label for="account" class="form-label">Account</label>
+                <select
+                  name="account"
+                  id="account"
+                  class="form-select"
+                  required
+                >
+                  <option value="">Select Account</option>
+                  {% for account in accounts %}
+                  <option value="{{ account.id }}">{{ account.email }}</option>
+                  {% endfor %}
+                </select>
+              </div>
+            </div>
+            <div class="col-md-3">
+              <div class="form-group mb-3">
+                <label for="city" class="form-label">City</label>
+                <select name="city" id="city" class="form-select" required>
+                  <option value="">Select City</option>
+                  {% for city in cities %}
+                  <option value="{{ city.id }}">
+                    {{ city.name }} ({{ city.radius }}km)
+                  </option>
+                  {% endfor %}
+                </select>
+              </div>
+            </div>
+            <div class="col-md-3">
+              <div class="form-group mb-3">
+                <label for="message" class="form-label">Message</label>
+                <select
+                  name="message"
+                  id="message"
+                  class="form-select"
+                  required
+                >
+                  <option value="">Select Message</option>
+                  {% for message in messages %}
+                  <option value="{{ message.id }}">
+                    {{ message.content[:30] }}...
+                  </option>
+                  {% endfor %}
+                </select>
+              </div>
+            </div>
+            <div class="col-md-3">
+              <div class="form-group mb-3">
+                <label for="max_posts" class="form-label">Max Posts</label>
+                <input
+                  type="number"
+                  name="max_posts"
+                  id="max_posts"
+                  class="form-control"
+                  min="1"
+                  max="20"
+                  value="{{ settings.max_posts_per_day|default(3) }}"
+                  required
+                />
+                <div class="form-text">
+                  Number of posts to scrape and comment on
+                </div>
+              </div>
+            </div>
+            <div class="col-md-3 d-flex align-items-end">
+              <button type="submit" class="btn btn-success w-100">
+                <i class="fas fa-play me-2"></i>Start Bot
+              </button>
+            </div>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="row mb-4">
+  <div class="col-md-4">
+    <div class="card h-100">
+      <div class="card-header bg-info text-white">
+        <h5 class="mb-0"><i class="fas fa-users me-2"></i>Accounts</h5>
+      </div>
+      <div class="card-body">
+        {% if accounts %}
+        <div class="list-group">
+          {% for account in accounts[:5] %}
+          <div class="list-group-item">
+            <div class="d-flex justify-content-between align-items-center">
+              <div>
+                <h6 class="mb-1">{{ account.email }}</h6>
+                <small class="text-muted">
+                  Last used: {% if account.last_used %} {{
+                  account.last_used.strftime('%Y-%m-%d %H:%M') }} {% else %}
+                  Never {% endif %}
+                </small>
+              </div>
+              <span
+                class="badge {% if account.active %}bg-success{% else %}bg-danger{% endif %} rounded-pill"
+              >
+                {{ 'Active' if account.active else 'Inactive' }}
+              </span>
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+        {% if accounts|length > 5 %}
+        <div class="text-center mt-3">
+          <a
+            href="{{ url_for('main.accounts') }}"
+            class="btn btn-sm btn-outline-info"
+          >
+            View All ({{ accounts|length }})
+          </a>
+        </div>
+        {% endif %} {% else %}
+        <div class="alert alert-warning">
+          No accounts added yet.
+          <a href="{{ url_for('main.accounts') }}">Add one now</a>.
+        </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <div class="col-md-4">
+    <div class="card h-100">
+      <div class="card-header bg-warning text-dark">
+        <h5 class="mb-0"><i class="fas fa-map-marker-alt me-2"></i>Cities</h5>
+      </div>
+      <div class="card-body">
+        {% if cities %}
+        <div class="list-group">
+          {% for city in cities[:5] %}
+          <div class="list-group-item">
+            <div class="d-flex justify-content-between align-items-center">
+              <div>
+                <h6 class="mb-1">{{ city.name }}</h6>
+                <small class="text-muted">Radius: {{ city.radius }}km</small>
+              </div>
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+        {% if cities|length > 5 %}
+        <div class="text-center mt-3">
+          <a
+            href="{{ url_for('main.cities') }}"
+            class="btn btn-sm btn-outline-warning"
+          >
+            View All ({{ cities|length }})
+          </a>
+        </div>
+        {% endif %} {% else %}
+        <div class="alert alert-warning">
+          No cities added yet.
+          <a href="{{ url_for('main.cities') }}">Add one now</a>.
+        </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <div class="col-md-4">
+    <div class="card h-100">
+      <div class="card-header bg-success text-white">
+        <h5 class="mb-0"><i class="fas fa-comment-alt me-2"></i>Messages</h5>
+      </div>
+      <div class="card-body">
+        {% if messages %}
+        <div class="list-group">
+          {% for message in messages[:5] %}
+          <div class="list-group-item">
+            <h6 class="mb-1">
+              {{ message.content[:50] }}{% if message.content|length > 50
+              %}...{% endif %}
+            </h6>
+            <small class="text-muted">
+              {% if message.image %}
+              <i class="fas fa-image me-1"></i>With image {% endif %}
+            </small>
+          </div>
+          {% endfor %}
+        </div>
+        {% if messages|length > 5 %}
+        <div class="text-center mt-3">
+          <a
+            href="{{ url_for('main.messages') }}"
+            class="btn btn-sm btn-outline-success"
+          >
+            View All ({{ messages|length }})
+          </a>
+        </div>
+        {% endif %} {% else %}
+        <div class="alert alert-warning">
+          No messages added yet.
+          <a href="{{ url_for('main.messages') }}">Add one now</a>.
+        </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="row">
+  <div class="col-md-12">
+    <div class="card">
+      <div class="card-header bg-secondary text-white">
+        <h5 class="mb-0"><i class="fas fa-history me-2"></i>Recent Activity</h5>
+      </div>
+      <div class="card-body">
+        {% if logs and logs.items %}
+        <div class="table-responsive">
+          <table class="table table-hover">
+            <thead>
+              <tr>
+                <th>Timestamp</th>
+                <th>Message</th>
+                <th>Level</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for log in logs.items %}
+              <tr
+                class="{% if log.level == 'error' %}table-danger{% elif log.level == 'warning' %}table-warning{% endif %}"
+              >
+                <td>
+                  {% if log.timestamp %} {% if log.timestamp is string %} {{
+                  log.timestamp.split('T')[0] }} {{
+                  log.timestamp.split('T')[1].split('.')[0] if 'T' in
+                  log.timestamp and log.timestamp.split('T')|length > 1 else ''
+                  }} {% else %} {{ log.timestamp.strftime('%Y-%m-%d %H:%M:%S')
+                  if log.timestamp is not string }} {% endif %} {% else %}
+                  Unknown time {% endif %}
+                </td>
+                <td>{{ log.message }}</td>
+                <td>
+                  <span
+                    class="badge bg-{{ 'success' if log.level == 'info' else 'warning' if log.level == 'warning' else 'danger' }}"
+                  >
+                    {{ log.level }}
+                  </span>
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        <div class="text-center mt-3">
+          <a href="{{ url_for('main.logs') }}" class="btn btn-sm btn-primary"
+            >View All Logs</a
+          >
+        </div>
+        {% else %}
+        <div class="alert alert-info">No recent logs available.</div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

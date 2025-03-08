@@ -1,0 +1,17 @@
+runtime: python39
+instance_class: F2
+env_variables:
+  FLASK_APP: app.py
+  FLASK_ENV: production
+  FLASK_DEBUG: 0
+
+entrypoint: gunicorn -b :$PORT app:app
+
+handlers:
+  - url: /static
+    static_dir: app/static
+    secure: always
+
+  - url: /.*
+    script: auto
+    secure: always

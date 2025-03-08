@@ -1,0 +1,147 @@
+{% extends 'base.html' %} {% block title %}Schedules - Airtasker Bot Manager{%
+endblock %} {% block content %}
+<div class="row mb-4">
+  <div class="col-md-12">
+    <div class="d-flex justify-content-between align-items-center">
+      <h2><i class="fas fa-calendar-alt me-2"></i>Schedules</h2>
+    </div>
+    <hr />
+  </div>
+</div>
+
+<div class="row">
+  <div class="col-md-4">
+    <div class="card">
+      <div class="card-header bg-primary text-white">
+        <h5 class="mb-0">Add New Schedule</h5>
+      </div>
+      <div class="card-body">
+        <form method="post">
+          {{ form.csrf_token }}
+          <div class="mb-3">
+            <label for="start_time" class="form-label"
+              >{{ form.start_time.label }}</label
+            >
+            {{ form.start_time(class="form-control") }} {% if
+            form.start_time.errors %}
+            <div class="invalid-feedback d-block">
+              {% for error in form.start_time.errors %} {{ error }} {% endfor %}
+            </div>
+            {% endif %}
+          </div>
+          <div class="mb-3">
+            <label for="end_time" class="form-label"
+              >{{ form.end_time.label }}</label
+            >
+            {{ form.end_time(class="form-control") }} {% if form.end_time.errors
+            %}
+            <div class="invalid-feedback d-block">
+              {% for error in form.end_time.errors %} {{ error }} {% endfor %}
+            </div>
+            {% endif %}
+          </div>
+          <div class="mb-3 form-check">
+            {{ form.active(class="form-check-input") }}
+            <label for="active" class="form-check-label"
+              >{{ form.active.label }}</label
+            >
+          </div>
+          <button type="submit" class="btn btn-primary w-100">
+            <i class="fas fa-plus-circle me-2"></i>Add Schedule
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-md-8">
+    <div class="card">
+      <div class="card-header bg-dark text-white">
+        <h5 class="mb-0">Schedule List</h5>
+      </div>
+      <div class="card-body">
+        {% if schedules %}
+        <div class="table-responsive">
+          <table class="table table-hover">
+            <thead>
+              <tr>
+                <th>Start Time</th>
+                <th>End Time</th>
+                <th>Status</th>
+                <th>Created</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for schedule in schedules %}
+              <tr>
+                <td>
+                  {{ schedule.start_time.strftime('%H:%M') if
+                  schedule.start_time else 'Unknown' }}
+                </td>
+                <td>
+                  {{ schedule.end_time.strftime('%H:%M') if schedule.end_time
+                  else 'Unknown' }}
+                </td>
+                <td>
+                  <span
+                    class="badge {% if schedule.active %}bg-success{% else %}bg-danger{% endif %}"
+                  >
+                    {{ 'Active' if schedule.active else 'Inactive' }}
+                  </span>
+                </td>
+                <td>
+                  {% if schedule.created_at %} {{
+                  schedule.created_at.strftime('%Y-%m-%d') }} {% else %} Unknown
+                  {% endif %}
+                </td>
+                <td>
+                  <form
+                    action="{{ url_for('main.delete_schedule', schedule_id=schedule.id) }}"
+                    method="post"
+                    onsubmit="return confirm('Are you sure you want to delete this schedule?');"
+                  >
+                    <button type="submit" class="btn btn-sm btn-danger">
+                      <i class="fas fa-trash"></i>
+                    </button>
+                  </form>
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% else %}
+        <div class="alert alert-info">
+          No schedules added yet. Use the form to add your first schedule.
+        </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="row mt-4">
+  <div class="col-md-12">
+    <div class="card">
+      <div class="card-header bg-info text-white">
+        <h5 class="mb-0">
+          <i class="fas fa-info-circle me-2"></i>Schedule Information
+        </h5>
+      </div>
+      <div class="card-body">
+        <p>
+          Schedules determine when the bot is allowed to run. A bot operation
+          will only start if the current time is within one of your active
+          scheduled time ranges.
+        </p>
+        <p>If no schedules are defined, the bot can run at any time.</p>
+        <p class="mb-0">
+          <strong>Example:</strong> If you create a schedule from 9:00 to 17:00,
+          the bot will only run operations between those hours.
+        </p>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
