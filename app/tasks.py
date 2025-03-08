@@ -41,6 +41,9 @@ def start_bot_task(account_id, city_id, message_id, max_posts=3, image=None, hea
         dm.add_log(error_msg, "error", group_id=group_id)
         return {"status": "error", "message": error_msg}
     
+    # Capture headless value in the closure for run_bot_with_logging
+    use_headless = headless
+    
     def run_bot_with_logging():
         with create_app().app_context():
             try:
@@ -50,8 +53,9 @@ def start_bot_task(account_id, city_id, message_id, max_posts=3, image=None, hea
                 
                 # In cloud environments, always use headless mode
                 is_cloud = os.environ.get('CLOUD_ENV', '').lower() == 'true'
+                run_headless = use_headless  # Use the value from the outer scope
                 if is_cloud:
-                    headless = True
+                    run_headless = True
                     dm.add_log("Running in cloud environment. Forcing headless mode.", "info", group_id=group_id)
                 
                 # Run the bot using Playwright
@@ -62,7 +66,7 @@ def start_bot_task(account_id, city_id, message_id, max_posts=3, image=None, hea
                     max_posts=max_posts,
                     message_content=message['content'],
                     group_id=group_id,
-                    headless=headless
+                    headless=run_headless
                 )
                 
                 if result.get('status') == 'success':

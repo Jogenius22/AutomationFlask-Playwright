@@ -10,6 +10,7 @@ import subprocess
 import sys
 import logging
 import time
+from dotenv import load_dotenv
 
 def setup_logging():
     """Set up logging for initialization"""
@@ -19,6 +20,28 @@ def setup_logging():
         handlers=[logging.StreamHandler(sys.stdout)]
     )
     return logging.getLogger("initializer")
+
+def check_env_variables():
+    """Check if required environment variables are set"""
+    logger.info("Checking environment variables...")
+    
+    # Load environment variables from .env file if it exists
+    load_dotenv()
+    
+    # Check for Capsolver API key
+    capsolver_api_key = os.environ.get('CAPSOLVER_API_KEY')
+    if not capsolver_api_key:
+        logger.warning("CAPSOLVER_API_KEY environment variable not set. Using default key.")
+        os.environ['CAPSOLVER_API_KEY'] = 'CAP-F79C6D0E7A810348A201783E25287C6003CFB45BBDCB670F96E525E7C0132148'
+    else:
+        logger.info("CAPSOLVER_API_KEY environment variable found.")
+        
+    # Set cloud environment variable if not set
+    if not os.environ.get('CLOUD_ENV'):
+        logger.info("CLOUD_ENV not set. Setting to 'true' for server environments.")
+        os.environ['CLOUD_ENV'] = 'true'
+    
+    logger.info("Environment variables checked.")
 
 def install_system_dependencies():
     """Install required system dependencies"""
@@ -36,7 +59,7 @@ def install_system_dependencies():
         )
         logger.info("System dependencies installed successfully")
     except subprocess.CalledProcessError as e:
-        logger.error(f"Failed to install system dependencies: {e.stderr.decode()}")
+        logger.error(f"Failed to install system dependencies: {e.stderr.decode() if hasattr(e, 'stderr') else str(e)}")
         # Continue anyway - they might already be installed in the Docker image
 
 def install_playwright_browsers():
@@ -58,7 +81,7 @@ def install_playwright_browsers():
         
         logger.info("Playwright browsers installed successfully")
     except subprocess.CalledProcessError as e:
-        logger.error(f"Failed to install Playwright browsers: {e.stderr.decode()}")
+        logger.error(f"Failed to install Playwright browsers: {e.stderr.decode() if hasattr(e, 'stderr') else str(e)}")
         # This is a critical error, but we'll continue and hope for the best
         
 def setup_display():
@@ -89,6 +112,9 @@ def create_directories():
 def main():
     """Main initialization function"""
     logger.info("Starting initialization...")
+    
+    # Check environment variables
+    check_env_variables()
     
     # Cloud environment setup
     if os.environ.get('CLOUD_ENV', '').lower() == 'true':
