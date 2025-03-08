@@ -70,6 +70,10 @@ ENV PORT=8080
 ENV CLOUD_ENV=true
 ENV DISPLAY=:99
 
+# Install Chrome extensions
+COPY extensions /app/extensions
+RUN chmod -R 755 /app/extensions
+
 # Run as non-root user for security
 RUN useradd -m appuser
 RUN chown -R appuser:appuser /app

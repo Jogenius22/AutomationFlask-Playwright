@@ -74,9 +74,12 @@ async def init_browser(headless=True):
 
     # Path to the Capsolver extension
     capsolver_extension_path = os.path.join(os.getcwd(), 'extensions', 'capsolver')
+    dm.add_log(f"Looking for Capsolver extension at: {capsolver_extension_path}", "info")
+    
     if not os.path.exists(capsolver_extension_path):
-        dm.add_log(f"Capsolver extension not found at {capsolver_extension_path}. Captcha solving may not work.", "warning")
-        capsolver_extension_path = None
+        dm.add_log(f"Capsolver extension folder not found. Captcha solving may not work.", "warning")
+    else:
+        dm.add_log(f"Found Capsolver extension at {capsolver_extension_path}", "info")
 
     # Launch playwright
     p = await async_playwright().start()
@@ -84,7 +87,7 @@ async def init_browser(headless=True):
     # Set browser viewport and device scale factor for better rendering
     viewport_size = {'width': 1280, 'height': 800}
     
-    # Create browser launch options
+    # Create browser launch options with extension
     browser_args = [
         '--disable-blink-features=AutomationControlled',
         '--disable-infobars',
@@ -94,9 +97,11 @@ async def init_browser(headless=True):
         '--start-maximized',
     ]
     
-    # Load Capsolver extension if available
-    if capsolver_extension_path and os.path.isdir(capsolver_extension_path):
-        dm.add_log(f"Loading Capsolver extension from {capsolver_extension_path}", "info")
+    # Load the Capsolver extension similar to how it's done in Puppeteer
+    if os.path.exists(capsolver_extension_path):
+        browser_args.append(f'--disable-extensions-except={capsolver_extension_path}')
+        browser_args.append(f'--load-extension={capsolver_extension_path}')
+        dm.add_log("Loading Capsolver extension with Playwright", "info")
     
     # Create browser context with stealth settings
     browser = await p.chromium.launch(
@@ -116,12 +121,6 @@ async def init_browser(headless=True):
         "java_script_enabled": True,
     }
     
-    # Add Capsolver extension to context options if available
-    if capsolver_extension_path and os.path.isdir(capsolver_extension_path):
-        # Playwright can't use extensions in the same way as Selenium
-        # We'll handle captcha solving separately in our code
-        dm.add_log("Note: Using built-in captcha handling instead of extension", "info")
-    
     context = await browser.new_context(**context_options)
     
     # Mask the fact that this is automated
@@ -139,6 +138,45 @@ async def init_browser(headless=True):
     
     # Create a new page
     page = await context.new_page()
+    
+    # Set up API key for the Capsolver extension
+    if os.path.exists(capsolver_extension_path):
+        dm.add_log(f"Setting up Capsolver with API key: {CAPSOLVER_API_KEY[:10]}...", "info")
+        
+        # Create a new page to configure the extension
+        config_page = await context.new_page()
+        # Navigate to extension options page
+        try:
+            # Navigate to the extension's options page - this will load it in a way that allows access
+            await config_page.goto(f"chrome-extension://pgojnojmmhpofjgdmaebadhbocahppod/www/index.html")
+            await asyncio.sleep(2)
+            
+            # Set API key with JavaScript
+            await config_page.evaluate(f"""
+            () => {{
+              try {{
+                localStorage.setItem('apiKey', '{CAPSOLVER_API_KEY}');
+                console.log('API key set through localStorage');
+                
+                // Also try to set directly in config
+                if (window.capsolver && window.capsolver.setApiKey) {{
+                  window.capsolver.setApiKey('{CAPSOLVER_API_KEY}');
+                  console.log('API key set through capsolver.setApiKey');
+                }}
+                
+                return true;
+              }} catch (error) {{
+                console.error('Error setting API key:', error);
+                return false;
+              }}
+            }}
+            """)
+            
+            dm.add_log("Capsolver API key configured", "info")
+        except Exception as e:
+            dm.add_log(f"Error configuring Capsolver: {str(e)}", "warning")
+        finally:
+            await config_page.close()
     
     # Set default navigation timeout
     page.set_default_timeout(30000)  # 30 seconds
