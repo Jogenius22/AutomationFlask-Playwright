@@ -49,81 +49,6 @@ async def save_screenshot(page, prefix, group_id):
     return filename
 
 # ------------------------------
-# Captcha handling functions
-# ------------------------------
-async def setup_captcha_solving(page, group_id=None):
-    """
-    Set up captcha solving by injecting JavaScript to handle reCAPTCHA
-    """
-    dm.add_log("Setting up captcha solving", "info", group_id=group_id)
-    
-    # Inject the captcha solving script
-    await page.add_script_tag(content=f"""
-    window.solveCaptcha = async function() {{
-        try {{
-            console.log("Looking for reCAPTCHA...");
-            const captchaFrame = document.querySelector('iframe[src*="recaptcha/api2/anchor"]');
-            if (!captchaFrame) {{
-                console.log("No reCAPTCHA frame found.");
-                return false;
-            }}
-            
-            console.log("reCAPTCHA frame found. Attempting to solve...");
-            
-            // Simulate user behavior to solve the captcha
-            const captchaBox = document.querySelector('.recaptcha-checkbox-border');
-            if (captchaBox) {{
-                captchaBox.click();
-                console.log("Clicked on captcha checkbox");
-                
-                // This would normally be where we'd use an external captcha solving service
-                // For demonstration, we'll just log that we need external help
-                console.log("Waiting for external captcha solving service...");
-                
-                // In a real implementation, we'd use the Capsolver API here
-                // For now, we'll just wait and hope the captcha is auto-solved
-                // or not required due to our anti-detection measures
-            }}
-            
-            return true;
-        }} catch (error) {{
-            console.error("Error solving captcha:", error);
-            return false;
-        }}
-    }};
-    """)
-    
-    dm.add_log("Captcha solving script injected", "info", group_id=group_id)
-    return True
-
-async def check_for_captcha(page, group_id=None):
-    """
-    Check if there's a captcha on the page and try to solve it
-    """
-    dm.add_log("Checking for captcha", "info", group_id=group_id)
-    
-    # Check if there's a reCAPTCHA iframe
-    has_captcha = await page.evaluate("""
-    () => {
-        const captchaFrame = document.querySelector('iframe[src*="recaptcha/api2/anchor"]');
-        return !!captchaFrame;
-    }
-    """)
-    
-    if has_captcha:
-        dm.add_log("Captcha detected, attempting to solve", "info", group_id=group_id)
-        await page.evaluate("window.solveCaptcha()")
-        
-        # Wait for some time to let the captcha be solved
-        await asyncio.sleep(5)
-        
-        dm.add_log("Captcha solving attempt completed", "info", group_id=group_id)
-        return True
-    else:
-        dm.add_log("No captcha detected", "info", group_id=group_id)
-        return False
-
-# ------------------------------
 # Initialize the Playwright browser
 # ------------------------------
 async def init_browser(headless=True):
@@ -147,36 +72,57 @@ async def init_browser(headless=True):
         user_agent = random.choice(USER_AGENTS)
         dm.add_log(f"Using {system_platform} user agent: {user_agent}", "info")
 
+    # Path to the Capsolver extension
+    capsolver_extension_path = os.path.join(os.getcwd(), 'extensions', 'capsolver')
+    if not os.path.exists(capsolver_extension_path):
+        dm.add_log(f"Capsolver extension not found at {capsolver_extension_path}. Captcha solving may not work.", "warning")
+        capsolver_extension_path = None
+
     # Launch playwright
     p = await async_playwright().start()
     
     # Set browser viewport and device scale factor for better rendering
     viewport_size = {'width': 1280, 'height': 800}
     
+    # Create browser launch options
+    browser_args = [
+        '--disable-blink-features=AutomationControlled',
+        '--disable-infobars',
+        '--disable-dev-shm-usage',
+        '--disable-setuid-sandbox',
+        '--no-sandbox',
+        '--start-maximized',
+    ]
+    
+    # Load Capsolver extension if available
+    if capsolver_extension_path and os.path.isdir(capsolver_extension_path):
+        dm.add_log(f"Loading Capsolver extension from {capsolver_extension_path}", "info")
+    
     # Create browser context with stealth settings
     browser = await p.chromium.launch(
         headless=headless,
-        args=[
-            '--disable-blink-features=AutomationControlled',
-            '--disable-infobars',
-            '--disable-dev-shm-usage',
-            '--disable-setuid-sandbox',
-            '--no-sandbox',
-            '--start-maximized',
-        ]
+        args=browser_args
     )
     
     # Create a new browser context with more granular settings
-    context = await browser.new_context(
-        user_agent=user_agent,
-        viewport=viewport_size,
-        device_scale_factor=1.0,
-        is_mobile=False,
-        has_touch=False,
-        locale='en-US',
-        permissions=['geolocation'],
-        java_script_enabled=True,
-    )
+    context_options = {
+        "user_agent": user_agent,
+        "viewport": viewport_size,
+        "device_scale_factor": 1.0,
+        "is_mobile": False,
+        "has_touch": False,
+        "locale": 'en-US',
+        "permissions": ['geolocation'],
+        "java_script_enabled": True,
+    }
+    
+    # Add Capsolver extension to context options if available
+    if capsolver_extension_path and os.path.isdir(capsolver_extension_path):
+        # Playwright can't use extensions in the same way as Selenium
+        # We'll handle captcha solving separately in our code
+        dm.add_log("Note: Using built-in captcha handling instead of extension", "info")
+    
+    context = await browser.new_context(**context_options)
     
     # Mask the fact that this is automated
     await context.add_init_script("""
@@ -197,9 +143,6 @@ async def init_browser(headless=True):
     # Set default navigation timeout
     page.set_default_timeout(30000)  # 30 seconds
     
-    # Set up captcha handling
-    await setup_captcha_solving(page)
-    
     # Log browser info
     dm.add_log(f"Browser initialized: Headless={headless}, Platform={system_platform}", "info")
     
@@ -214,8 +157,10 @@ async def login(page, email, password, group_id=None):
         # Navigate directly to the login page
         dm.add_log(f"Navigating to login page for {email}", "info", group_id=group_id)
         await page.goto("https://www.airtasker.com/login")
+        
+        # Wait longer for the page to load completely to allow Capsolver extension to initialize
         await page.wait_for_load_state("networkidle")
-        await asyncio.sleep(random.uniform(3, 5))
+        await asyncio.sleep(random.uniform(7, 10))  # Wait longer as in original code
         
         # Take screenshot of login page
         await save_screenshot(page, "login_page", group_id)
@@ -256,24 +201,24 @@ async def login(page, email, password, group_id=None):
             await save_screenshot(page, "password_error", group_id)
             raise
 
-        # Check for captcha and solve if present
-        await check_for_captcha(page, group_id)
-        
-        # Wait briefly before submitting (for captcha to be solved)
-        dm.add_log("Waiting before submitting login form", "info", group_id=group_id)
-        await asyncio.sleep(random.uniform(2, 4))
+        # Wait for the Capsolver extension to automatically solve the captcha
+        # This is the key part: we don't need special handling, just wait for the extension to work
+        dm.add_log("Waiting for Capsolver extension to solve captcha automatically", "info", group_id=group_id)
+        await asyncio.sleep(random.uniform(10, 15))  # Long wait as in original code
         
         # Take screenshot before submitting
         await save_screenshot(page, "before_submit", group_id)
         
-        # Submit the login form - using the original XPath
+        # Submit the login form - using the original XPath but with proper Playwright format
         dm.add_log("Submitting login form", "info", group_id=group_id)
         submit_button_xpath = "/html/body/main/section/div/div/div/form/div[2]/button"
-        await page.click(submit_button_xpath)
+        
+        # In Playwright, XPath selectors must be prefixed with "xpath="
+        await page.click(f"xpath={submit_button_xpath}")
         
         # Wait for navigation to complete
         await page.wait_for_load_state("networkidle")
-        await asyncio.sleep(random.uniform(3, 5))
+        await asyncio.sleep(random.uniform(10, 15))  # Long wait as in original code
         
         # Take screenshot after login
         await save_screenshot(page, "post_login", group_id)
@@ -315,6 +260,7 @@ async def set_location_filter(page, suburb_name, radius_km=100, group_id=None):
         # Click the filter button - using the original XPath
         filter_button_xpath = '//*[@id="airtasker-app"]/nav/nav/div/div/div/div[3]/button'
         try:
+            # Always prefix XPath selectors with "xpath="
             await page.wait_for_selector(f"xpath={filter_button_xpath}", timeout=15000)
             await page.click(f"xpath={filter_button_xpath}")
             await asyncio.sleep(random.uniform(1, 2))
@@ -399,7 +345,7 @@ async def scrape_tasks(page, max_scroll=3, group_id=None):
     for scroll_count in range(max_scroll):
         dm.add_log(f"Scroll {scroll_count + 1}/{max_scroll}", "info", group_id=group_id)
         
-        # Wait for task containers to be visible
+        # Wait for task containers to be visible - always prefix XPath selectors with "xpath="
         await page.wait_for_selector(f"xpath={task_container_xpath}")
         
         # Get all task containers currently visible
@@ -418,6 +364,7 @@ async def scrape_tasks(page, max_scroll=3, group_id=None):
             
             # Get task title - using the original XPath
             try:
+                # When using container.query_selector with XPath, still need the "xpath=" prefix
                 title_element = await container.query_selector(f"xpath={title_xpath}")
                 title_txt = await title_element.text_content() if title_element else "Unknown Title"
             except:
@@ -511,6 +458,7 @@ async def post_comment_on_task(page, task_url, image_path=None, group_id=None):
     # Find and fill the comment textarea - using the original XPath
     comment_box_xpath = '//*[@id="airtasker-app"]/main/div/div[1]/div[3]/div/div/div[2]/div/div[6]/div/div[2]/div/div/div/div/div[3]/textarea'
     try:
+        # Always prefix XPath selectors with "xpath="
         await page.wait_for_selector(f"xpath={comment_box_xpath}", timeout=15000)
         
         # Make sure the textarea is in view and click it

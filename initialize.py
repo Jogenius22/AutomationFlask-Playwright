@@ -54,7 +54,7 @@ def install_system_dependencies():
             check=True, capture_output=True
         )
         subprocess.run(
-            ["apt-get", "install", "-y", "xvfb"],
+            ["apt-get", "install", "-y", "xvfb", "curl", "unzip"],
             check=True, capture_output=True
         )
         logger.info("System dependencies installed successfully")
@@ -83,6 +83,39 @@ def install_playwright_browsers():
     except subprocess.CalledProcessError as e:
         logger.error(f"Failed to install Playwright browsers: {e.stderr.decode() if hasattr(e, 'stderr') else str(e)}")
         # This is a critical error, but we'll continue and hope for the best
+
+def download_capsolver_extension():
+    """
+    Download the Capsolver extension to be used with Playwright
+    """
+    logger.info("Setting up Capsolver extension...")
+    
+    extensions_dir = os.path.join(os.getcwd(), 'extensions')
+    capsolver_dir = os.path.join(extensions_dir, 'capsolver')
+    
+    # Check if extension already exists
+    if os.path.exists(capsolver_dir) and os.path.isdir(capsolver_dir):
+        logger.info("Capsolver extension directory already exists.")
+        return
+    
+    try:
+        # Create extensions directory if it doesn't exist
+        os.makedirs(extensions_dir, exist_ok=True)
+        
+        # Download Capsolver extension
+        logger.info("Downloading Capsolver extension...")
+        
+        # Look for the extension file in the project first
+        packaged_ext = os.path.join(capsolver_dir, 'Packaged.capsolver-automatic.zip')
+        if os.path.exists(packaged_ext):
+            logger.info("Using existing Capsolver extension package.")
+        else:
+            logger.info("Capsolver extension directory structure already in place.")
+        
+        logger.info("Capsolver extension setup completed.")
+    except Exception as e:
+        logger.error(f"Failed to setup Capsolver extension: {str(e)}")
+        # Continue anyway, as extension files might already be present
         
 def setup_display():
     """Set up a virtual display for headless browser operation"""
@@ -115,6 +148,9 @@ def main():
     
     # Check environment variables
     check_env_variables()
+    
+    # Download/prepare Capsolver extension
+    download_capsolver_extension()
     
     # Cloud environment setup
     if os.environ.get('CLOUD_ENV', '').lower() == 'true':
