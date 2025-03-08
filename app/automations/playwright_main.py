@@ -5,8 +5,11 @@ import datetime
 import json
 import platform
 import asyncio
+import requests
+import base64
 from dotenv import load_dotenv
 from playwright.async_api import async_playwright, Page, Browser, ElementHandle, TimeoutError
+from playwright_stealth import stealth_async
 
 # Import from the app
 from app import data_manager as dm
@@ -49,6 +52,151 @@ async def save_screenshot(page, prefix, group_id):
     return filename
 
 # ------------------------------
+# Captcha solving functions using direct API
+# ------------------------------
+async def solve_recaptcha_with_capsolver(page, sitekey, url, group_id=None):
+    """Solve reCAPTCHA directly using the Capsolver API"""
+    dm.add_log("Attempting to solve reCAPTCHA using Capsolver API", "info", group_id=group_id)
+    
+    # Take a screenshot of the page with the CAPTCHA
+    await save_screenshot(page, "before_captcha", group_id)
+    
+    # Prepare the API request
+    api_endpoint = "https://api.capsolver.com/createTask"
+    payload = {
+        "clientKey": CAPSOLVER_API_KEY,
+        "task": {
+            "type": "RecaptchaV2TaskProxyless",
+            "websiteURL": url,
+            "websiteKey": sitekey
+        }
+    }
+    
+    try:
+        # Submit the task to Capsolver
+        dm.add_log("Submitting CAPTCHA task to Capsolver", "info", group_id=group_id)
+        response = requests.post(api_endpoint, json=payload)
+        response_data = response.json()
+        
+        if response_data.get("errorId") > 0:
+            dm.add_log(f"Capsolver API error: {response_data.get('errorDescription')}", "error", group_id=group_id)
+            return None
+        
+        task_id = response_data.get("taskId")
+        if not task_id:
+            dm.add_log("No task ID received from Capsolver", "error", group_id=group_id)
+            return None
+        
+        # Wait for the solution (polling)
+        dm.add_log(f"Waiting for CAPTCHA solution (task ID: {task_id})", "info", group_id=group_id)
+        max_attempts = 30
+        for attempt in range(max_attempts):
+            # Check the task status
+            status_payload = {
+                "clientKey": CAPSOLVER_API_KEY,
+                "taskId": task_id
+            }
+            status_response = requests.post("https://api.capsolver.com/getTaskResult", json=status_payload)
+            status_data = status_response.json()
+            
+            if status_data.get("status") == "ready":
+                # We have a solution
+                g_recaptcha_response = status_data.get("solution", {}).get("gRecaptchaResponse")
+                dm.add_log("CAPTCHA solution received!", "info", group_id=group_id)
+                
+                # Inject the solution into the page
+                await page.evaluate(f"""
+                    document.querySelector('[name="g-recaptcha-response"]').innerHTML = '{g_recaptcha_response}';
+                    if (typeof ___grecaptcha_cfg !== 'undefined') {{
+                        Object.keys(___grecaptcha_cfg.clients).forEach(function(key) {{
+                            ___grecaptcha_cfg.clients[key].H.H.callback('{g_recaptcha_response}');
+                        }});
+                    }}
+                """)
+                
+                # Take a screenshot after solving
+                await save_screenshot(page, "after_captcha", group_id)
+                return g_recaptcha_response
+            
+            elif status_data.get("status") == "processing":
+                # Still processing, wait and try again
+                dm.add_log(f"Capsolver still processing (attempt {attempt+1}/{max_attempts})", "info", group_id=group_id)
+                await asyncio.sleep(3)
+                
+            else:
+                # Error or unknown status
+                dm.add_log(f"Unexpected status: {status_data}", "error", group_id=group_id)
+                return None
+        
+        # If we reach here, we've exceeded the maximum attempts
+        dm.add_log("Exceeded maximum waiting time for CAPTCHA solution", "error", group_id=group_id)
+        return None
+        
+    except Exception as e:
+        dm.add_log(f"Error solving CAPTCHA: {str(e)}", "error", group_id=group_id)
+        return None
+
+async def detect_and_solve_recaptcha(page, group_id=None):
+    """Detect if there's a reCAPTCHA on the page and solve it if found"""
+    dm.add_log("Checking for reCAPTCHA on page", "info", group_id=group_id)
+    
+    # Check if there's a reCAPTCHA iframe
+    has_recaptcha = await page.evaluate("""
+    () => {
+        // Look for reCAPTCHA iframe
+        const iframes = document.querySelectorAll('iframe[src*="recaptcha/api2/anchor"]');
+        if (iframes.length > 0) {
+            return true;
+        }
+        
+        // Look for reCAPTCHA elements
+        const recaptchaDiv = document.querySelector('.g-recaptcha, div[class*="g-recaptcha"]');
+        return !!recaptchaDiv;
+    }
+    """)
+    
+    if has_recaptcha:
+        dm.add_log("reCAPTCHA detected, attempting to solve", "info", group_id=group_id)
+        
+        # Get reCAPTCHA sitekey
+        sitekey = await page.evaluate("""
+        () => {
+            // Try to find sitekey in a g-recaptcha div
+            const recaptchaDiv = document.querySelector('.g-recaptcha, div[class*="g-recaptcha"]');
+            if (recaptchaDiv && recaptchaDiv.getAttribute('data-sitekey')) {
+                return recaptchaDiv.getAttribute('data-sitekey');
+            }
+            
+            // Try to find it in recaptcha script
+            const recaptchaScript = document.querySelector('script[src*="recaptcha/api.js"]');
+            if (recaptchaScript) {
+                const src = recaptchaScript.getAttribute('src');
+                const sitekeyMatch = src.match(/render=([^&]+)/);
+                if (sitekeyMatch && sitekeyMatch[1]) {
+                    return sitekeyMatch[1];
+                }
+            }
+            
+            // Default key for airtasker.com if not found
+            return '6LcpU5wUAAAAABpx8tX1JfdrPKgA7R8AXjJ6HhQJ';
+        }
+        """)
+        
+        dm.add_log(f"Found reCAPTCHA with sitekey: {sitekey}", "info", group_id=group_id)
+        
+        # Solve the reCAPTCHA
+        solution = await solve_recaptcha_with_capsolver(page, sitekey, page.url, group_id)
+        if solution:
+            dm.add_log("Successfully solved reCAPTCHA", "info", group_id=group_id)
+            return True
+        else:
+            dm.add_log("Failed to solve reCAPTCHA", "warning", group_id=group_id)
+            return False
+    else:
+        dm.add_log("No reCAPTCHA detected on page", "info", group_id=group_id)
+        return False
+
+# ------------------------------
 # Initialize the Playwright browser
 # ------------------------------
 async def init_browser(headless=True):
@@ -72,15 +220,6 @@ async def init_browser(headless=True):
         user_agent = random.choice(USER_AGENTS)
         dm.add_log(f"Using {system_platform} user agent: {user_agent}", "info")
 
-    # Path to the Capsolver extension
-    capsolver_extension_path = os.path.join(os.getcwd(), 'extensions', 'capsolver')
-    dm.add_log(f"Looking for Capsolver extension at: {capsolver_extension_path}", "info")
-    
-    if not os.path.exists(capsolver_extension_path):
-        dm.add_log(f"Capsolver extension folder not found. Captcha solving may not work.", "warning")
-    else:
-        dm.add_log(f"Found Capsolver extension at {capsolver_extension_path}", "info")
-
     # Launch playwright
     p = await async_playwright().start()
     
@@ -96,12 +235,6 @@ async def init_browser(headless=True):
         '--no-sandbox',
         '--start-maximized',
     ]
-    
-    # Load the Capsolver extension similar to how it's done in Puppeteer
-    if os.path.exists(capsolver_extension_path):
-        browser_args.append(f'--disable-extensions-except={capsolver_extension_path}')
-        browser_args.append(f'--load-extension={capsolver_extension_path}')
-        dm.add_log("Loading Capsolver extension with Playwright", "info")
     
     # Create browser context with stealth settings
     browser = await p.chromium.launch(
@@ -123,66 +256,108 @@ async def init_browser(headless=True):
     
     context = await browser.new_context(**context_options)
     
-    # Mask the fact that this is automated
-    await context.add_init_script("""
-    Object.defineProperty(navigator, 'webdriver', {
-        get: () => false
-    });
-    Object.defineProperty(navigator, 'plugins', {
-        get: () => [1, 2, 3, 4, 5]
-    });
-    window.chrome = {
-        runtime: {}
-    };
-    """)
-    
     # Create a new page
     page = await context.new_page()
     
-    # Set up API key for the Capsolver extension
-    if os.path.exists(capsolver_extension_path):
-        dm.add_log(f"Setting up Capsolver with API key: {CAPSOLVER_API_KEY[:10]}...", "info")
-        
-        # Create a new page to configure the extension
-        config_page = await context.new_page()
-        # Navigate to extension options page
-        try:
-            # Navigate to the extension's options page - this will load it in a way that allows access
-            await config_page.goto(f"chrome-extension://pgojnojmmhpofjgdmaebadhbocahppod/www/index.html")
-            await asyncio.sleep(2)
-            
-            # Set API key with JavaScript
-            await config_page.evaluate(f"""
-            () => {{
-              try {{
-                localStorage.setItem('apiKey', '{CAPSOLVER_API_KEY}');
-                console.log('API key set through localStorage');
-                
-                // Also try to set directly in config
-                if (window.capsolver && window.capsolver.setApiKey) {{
-                  window.capsolver.setApiKey('{CAPSOLVER_API_KEY}');
-                  console.log('API key set through capsolver.setApiKey');
-                }}
-                
-                return true;
-              }} catch (error) {{
-                console.error('Error setting API key:', error);
-                return false;
-              }}
-            }}
-            """)
-            
-            dm.add_log("Capsolver API key configured", "info")
-        except Exception as e:
-            dm.add_log(f"Error configuring Capsolver: {str(e)}", "warning")
-        finally:
-            await config_page.close()
+    # Apply stealth mode to make automation undetectable
+    await stealth_async(page)
+    
+    # Additional anti-detection scripts
+    await page.add_init_script("""
+    Object.defineProperty(navigator, 'webdriver', {
+        get: () => false
+    });
+    
+    Object.defineProperty(navigator, 'plugins', {
+        get: () => [
+            {
+                0: {type: "application/x-google-chrome-pdf"},
+                description: "Portable Document Format",
+                filename: "internal-pdf-viewer",
+                length: 1,
+                name: "Chrome PDF Plugin"
+            },
+            {
+                0: {type: "application/pdf"},
+                description: "Portable Document Format",
+                filename: "internal-pdf-viewer",
+                length: 1,
+                name: "Chrome PDF Viewer"
+            },
+            {
+                0: {type: "application/x-nacl"},
+                1: {type: "application/x-pnacl"},
+                description: "Native Client Executable",
+                filename: "internal-nacl-plugin",
+                length: 2,
+                name: "Native Client"
+            }
+        ]
+    });
+    
+    window.chrome = {
+        app: {
+            isInstalled: false,
+            InstallState: {
+                DISABLED: 'disabled',
+                INSTALLED: 'installed',
+                NOT_INSTALLED: 'not_installed'
+            },
+            RunningState: {
+                CANNOT_RUN: 'cannot_run',
+                READY_TO_RUN: 'ready_to_run',
+                RUNNING: 'running'
+            }
+        },
+        runtime: {
+            OnInstalledReason: {
+                CHROME_UPDATE: 'chrome_update',
+                INSTALL: 'install',
+                SHARED_MODULE_UPDATE: 'shared_module_update',
+                UPDATE: 'update'
+            },
+            OnRestartRequiredReason: {
+                APP_UPDATE: 'app_update',
+                OS_UPDATE: 'os_update',
+                PERIODIC: 'periodic'
+            },
+            PlatformArch: {
+                ARM: 'arm',
+                ARM64: 'arm64',
+                MIPS: 'mips',
+                MIPS64: 'mips64',
+                X86_32: 'x86-32',
+                X86_64: 'x86-64'
+            },
+            PlatformNaclArch: {
+                ARM: 'arm',
+                MIPS: 'mips',
+                MIPS64: 'mips64',
+                X86_32: 'x86-32',
+                X86_64: 'x86-64'
+            },
+            PlatformOs: {
+                ANDROID: 'android',
+                CROS: 'cros',
+                LINUX: 'linux',
+                MAC: 'mac',
+                OPENBSD: 'openbsd',
+                WIN: 'win'
+            },
+            RequestUpdateCheckStatus: {
+                NO_UPDATE: 'no_update',
+                THROTTLED: 'throttled',
+                UPDATE_AVAILABLE: 'update_available'
+            }
+        }
+    };
+    """)
     
     # Set default navigation timeout
     page.set_default_timeout(30000)  # 30 seconds
     
     # Log browser info
-    dm.add_log(f"Browser initialized: Headless={headless}, Platform={system_platform}", "info")
+    dm.add_log(f"Browser initialized with stealth mode: Headless={headless}, Platform={system_platform}", "info")
     
     return p, browser, context, page
 
@@ -196,7 +371,7 @@ async def login(page, email, password, group_id=None):
         dm.add_log(f"Navigating to login page for {email}", "info", group_id=group_id)
         await page.goto("https://www.airtasker.com/login")
         
-        # Wait longer for the page to load completely to allow Capsolver extension to initialize
+        # Wait longer for the page to load completely
         await page.wait_for_load_state("networkidle")
         await asyncio.sleep(random.uniform(7, 10))  # Wait longer as in original code
         
@@ -239,20 +414,33 @@ async def login(page, email, password, group_id=None):
             await save_screenshot(page, "password_error", group_id)
             raise
 
-        # Wait for the Capsolver extension to automatically solve the captcha
-        # This is the key part: we don't need special handling, just wait for the extension to work
-        dm.add_log("Waiting for Capsolver extension to solve captcha automatically", "info", group_id=group_id)
-        await asyncio.sleep(random.uniform(10, 15))  # Long wait as in original code
+        # Look for and solve any CAPTCHA that's present
+        await detect_and_solve_recaptcha(page, group_id)
+        
+        # Wait briefly before submitting
+        dm.add_log("Waiting before submitting login form", "info", group_id=group_id)
+        await asyncio.sleep(random.uniform(2, 4))
         
         # Take screenshot before submitting
         await save_screenshot(page, "before_submit", group_id)
         
         # Submit the login form - using the original XPath but with proper Playwright format
         dm.add_log("Submitting login form", "info", group_id=group_id)
-        submit_button_xpath = "/html/body/main/section/div/div/div/form/div[2]/button"
         
-        # In Playwright, XPath selectors must be prefixed with "xpath="
-        await page.click(f"xpath={submit_button_xpath}")
+        # Try different methods to click the submit button
+        try:
+            # Method 1: Try to use the original XPath
+            submit_button_xpath = "/html/body/main/section/div/div/div/form/div[2]/button"
+            await page.click(f"xpath={submit_button_xpath}")
+        except Exception as e:
+            dm.add_log(f"XPath submit button click failed: {str(e)}", "warning", group_id=group_id)
+            try:
+                # Method 2: Try to use a CSS selector
+                await page.click('form button[type="submit"]')
+            except Exception as e2:
+                dm.add_log(f"CSS submit button click failed: {str(e2)}", "warning", group_id=group_id)
+                # Method 3: Try to use JavaScript to submit the form
+                await page.evaluate("document.querySelector('form').submit()")
         
         # Wait for navigation to complete
         await page.wait_for_load_state("networkidle")
@@ -268,7 +456,7 @@ async def login(page, email, password, group_id=None):
             if avatar_element:
                 dm.add_log("Login successful: Avatar element found", "info", group_id=group_id)
                 return True
-        except:
+        except Exception:
             # If avatar not found, check URL as fallback
             current_url = page.url
             if "airtasker.com" in current_url and ("/login" not in current_url):
